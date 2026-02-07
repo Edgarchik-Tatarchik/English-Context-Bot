@@ -33,10 +33,12 @@ Term: "{term}"
 Correct explanation (DO NOT copy): "{correct_expl}"
 
 Generate EXACTLY 2 plausible but WRONG explanations (CEFR B1), 1 sentence each.
+
 Rules:
-- Must not match the correct meaning.
-- Must not be simple negations/opposites.
-- Must be believable confusions.
+- Must be wrong, but believable.
+- No opposites / no simple negation ("not X").
+- The 2 wrong options must be DIFFERENT from each other (different idea).
+- Avoid reusing phrases from the correct explanation.
 Return JSON ONLY: {{"distractors": ["...", "..."]}}
 """.strip()
 
@@ -53,17 +55,17 @@ Return JSON ONLY: {{"distractors": ["...", "..."]}}
         },
         max_output_tokens=200
     )
-
-    import json
+    
     data = json.loads(response.output_text)
     distractors = data.get("distractors")
 
 
-    if not isinstance(distractors, list) or len(distractors) != 2:
+    distractors = [d.strip() for d in distractors]
+    if len(set(distractors)) != 2:
         return [
-            "It describes something very expensive and luxurious.",
-            "It means to stop doing something for a short time."
-        ]
+        "It describes something very expensive and luxurious.",
+        "It means to stop doing something for a short time."
+    ]
     return distractors
 
 
@@ -87,10 +89,8 @@ RESPONSE_SCHEMA = {
     "strict": True
 }
 
-def generate_quiz_distractors(term: str, correct_expl: str) -> list[str]:
-    """
-    Return 2 plausible but incorrect short explanations (B1 level).
-    """
+
+
     
 def generate_explanation_and_examples(term: str) -> dict:
     prompt = f"""
