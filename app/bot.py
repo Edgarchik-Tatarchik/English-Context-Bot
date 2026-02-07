@@ -7,7 +7,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from app.storage import init_db, save_term, list_saved, get_saved_item, get_random_saved_term, add_quiz_attempt
 
 
-from app.ai_service import generate_explanation_and_examples
+from app.ai_service import generate_explanation_and_examples, generate_quiz_distractors
 
 router = Router()
 
@@ -23,7 +23,8 @@ def build_actions_kb(term: str) -> InlineKeyboardMarkup:
     kb.button(text="➕ More examples", callback_data=f"more:{term}")
     kb.button(text="💾 Save", callback_data=f"save:{term}")
     kb.button(text="🧠 Quiz", callback_data=f"quiz:{term}")
-    kb.adjust(2, 1)
+    kb.button(text="📚 Saved words", callback_data="saved:1")
+    kb.adjust(2, 2)
     return kb.as_markup()
 
 
@@ -106,6 +107,45 @@ async def saved_cmd(message: Message):
         return
     text = "💾 Saved terms (latest 20):\n" + "\n".join([f"- {t}" for t in items])
     await message.answer(text)
+    
+@router.callback_query(F.data.startswith("saved:"))
+async def on_saved(callback: CallbackQuery):
+    page = int(callback.data.split(":")[1])
+    terms = list_saved(callback.from_user.id, limit=300)  
+    text, kb = render_saved_page(terms, page)
+    await callback.message.answer(text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=kb)
+    await callback.answer()
+    
+@router.message(F.text == "/saved")
+async def saved_cmd(message: Message):
+    terms = list_saved(message.from_user.id, limit=300)
+    text, kb = render_saved_page(terms, 1)
+    await message.answer(text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=kb)
+
+PAGE_SIZE = 10
+
+def render_saved_page(terms: list[str], page: int) -> tuple[str, InlineKeyboardMarkup | None]:
+    total = len(terms)
+    if total == 0:
+        return "📚 You have no saved terms yet.", None
+
+    pages = (total + PAGE_SIZE - 1) // PAGE_SIZE
+    page = max(1, min(page, pages))
+
+    start = (page - 1) * PAGE_SIZE
+    chunk = terms[start:start + PAGE_SIZE]
+
+    lines = "\n".join([f"{start+i+1}. {t}" for i, t in enumerate(chunk)])
+    text = f"📚 *Saved terms* (page {page}/{pages})\n\n{escape_md_v2(lines)}"
+
+    kb = InlineKeyboardBuilder()
+    if page > 1:
+        kb.button(text="⬅ Prev", callback_data=f"saved:{page-1}")
+    if page < pages:
+        kb.button(text="Next ➡", callback_data=f"saved:{page+1}")
+    kb.adjust(2)
+
+    return text, kb.as_markup()
 
 
 @router.callback_query(F.data.startswith("save:"))
@@ -146,9 +186,19 @@ async def on_quiz(callback: CallbackQuery):
         return
 
     correct = item.explanation.strip()
-    fake1 = f"It is related to '{term}', but not exactly."
-    fake2 = f"It means the opposite of '{term}'."
-    options = [correct, fake1, fake2]
+
+    await callback.answer("Generating quiz...")
+
+    try:
+        distractors = await asyncio.to_thread(generate_quiz_distractors, term, correct)
+    except Exception as e:
+        distractors = [
+            "It describes someone who likes being alone and quiet.",
+            "It means to make a quick decision without thinking much."
+        ]
+        print("AI ERROR (distractors):", repr(e))
+
+    options = [correct] + distractors
 
     import random
     random.shuffle(options)
@@ -159,15 +209,14 @@ async def on_quiz(callback: CallbackQuery):
         kb.button(text=str(i + 1), callback_data=f"quiz_ans:{term}:{i}:{correct_index}")
     kb.adjust(3)
 
-    # ВАЖНО: экранируем для MarkdownV2
     lines = "\n".join([f"{i+1}\\) {escape_md_v2(o)}" for i, o in enumerate(options)])
     text = (
-        f"🧠 *Quiz:* What is the best explanation for `{escape_md_v2(term)}`?\n\n"
+        f"🧠 *Quiz:* Choose the best explanation for `{escape_md_v2(term)}`\n\n"
         f"{lines}"
     )
 
     await callback.message.answer(text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=kb.as_markup())
-    await callback.answer()
+
 
 @router.callback_query(F.data.startswith("quiz_ans:"))
 async def on_quiz_answer(callback: CallbackQuery):
@@ -178,10 +227,22 @@ async def on_quiz_answer(callback: CallbackQuery):
 
     add_quiz_attempt(user_id, term, chosen, correct)
 
+    item = get_saved_item(user_id, term)
+    correct_text = item.explanation.strip() if item else "N/A"
+    example = item.examples[0] if (item and item.examples) else ""
+
     if chosen == correct:
         await callback.answer("Correct ✅", show_alert=True)
     else:
-        await callback.answer(f"Not quite ❌ Correct: {correct+1}", show_alert=True)
+        await callback.answer(f"Wrong ❌ Correct: {correct+1}", show_alert=True)
+
+    msg = (
+        f"✅ *Correct explanation for* `{escape_md_v2(term)}`:\n"
+        f"{escape_md_v2(correct_text)}\n\n"
+        f"📌 *Example:*\n{escape_md_v2(example)}"
+    )
+    await callback.message.answer(msg, parse_mode=ParseMode.MARKDOWN_V2)
+
 
 
 def create_bot_and_dispatcher(token: str):
