@@ -4,15 +4,17 @@ from aiogram import Bot, Dispatcher, Router, F
 from aiogram.enums import ParseMode
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+from app.storage import init_db, save_term, list_saved, get_saved_item, get_random_saved_term, add_quiz_attempt
+
 
 from app.ai_service import generate_explanation_and_examples
 
 router = Router()
 
 WORD_RE = re.compile(r"^[A-Za-z][A-Za-z\s'\-]{0,60}$")
+CACHE: dict[tuple[int, str], dict] = {}
 def escape_md_v2(text: str) -> str:
-    # Telegram MarkdownV2 special chars must be escaped:
-    # _ * [ ] ( ) ~ ` > # + - = | { } . !
+    
     return re.sub(r'([_*\[\]()~`>#+\-=|{}.!])', r'\\\1', text)
 
 
@@ -54,6 +56,10 @@ async def handle_text(message: Message):
         data = await asyncio.to_thread(generate_explanation_and_examples, term)
         explanation = data["simple_explanation"]
         examples = data["examples"]
+        CACHE[(message.from_user.id, term)] = {
+            "explanation": explanation,
+            "examples": examples,
+        }
 
         header, examples_text = format_answer(term, explanation, examples)
 
@@ -92,20 +98,94 @@ async def on_more_examples(callback: CallbackQuery):
         await callback.message.answer("⚠️ AI error while generating more examples.")
         print("AI ERROR (more):", repr(e))
 
+@router.message(F.text == "/saved")
+async def saved_cmd(message: Message):
+    items = list_saved(message.from_user.id, limit=20)
+    if not items:
+        await message.answer("You haven't saved any terms yet. Use 💾 Save under an answer.")
+        return
+    text = "💾 Saved terms (latest 20):\n" + "\n".join([f"- {t}" for t in items])
+    await message.answer(text)
+
 
 @router.callback_query(F.data.startswith("save:"))
 async def on_save(callback: CallbackQuery):
-    await callback.answer("Saved ✅ (stub)")
-    await callback.message.answer("💾 Save is not implemented yet. Next step: SQLite storage.")
+    term = callback.data.split(":", 1)[1].strip()
+    user_id = callback.from_user.id
+
+    payload = CACHE.get((user_id, term))
+    if not payload:
+        await callback.answer("No cached data. Send the term again, then press Save.", show_alert=True)
+        return
+
+    ok = save_term(
+        user_id=user_id,
+        term=term,
+        explanation=payload["explanation"],
+        examples=payload["examples"],
+    )
+
+    if ok:
+        await callback.answer("Saved ✅")
+    else:
+        await callback.answer("Already saved 👍")
 
 
 @router.callback_query(F.data.startswith("quiz:"))
 async def on_quiz(callback: CallbackQuery):
-    await callback.answer("Quiz ✅ (stub)")
-    await callback.message.answer("🧠 Quiz is not implemented yet. Next step: 3-question mini quiz.")
+    user_id = callback.from_user.id
+
+    term = get_random_saved_term(user_id)
+    if not term:
+        await callback.answer("Save some terms first 🙂", show_alert=True)
+        return
+
+    item = get_saved_item(user_id, term)
+    if not item:
+        await callback.answer("Quiz data not found. Try again.", show_alert=True)
+        return
+
+    correct = item.explanation.strip()
+    fake1 = f"It is related to '{term}', but not exactly."
+    fake2 = f"It means the opposite of '{term}'."
+    options = [correct, fake1, fake2]
+
+    import random
+    random.shuffle(options)
+    correct_index = options.index(correct)
+
+    kb = InlineKeyboardBuilder()
+    for i in range(len(options)):
+        kb.button(text=str(i + 1), callback_data=f"quiz_ans:{term}:{i}:{correct_index}")
+    kb.adjust(3)
+
+    # ВАЖНО: экранируем для MarkdownV2
+    lines = "\n".join([f"{i+1}\\) {escape_md_v2(o)}" for i, o in enumerate(options)])
+    text = (
+        f"🧠 *Quiz:* What is the best explanation for `{escape_md_v2(term)}`?\n\n"
+        f"{lines}"
+    )
+
+    await callback.message.answer(text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=kb.as_markup())
+    await callback.answer()
+
+@router.callback_query(F.data.startswith("quiz_ans:"))
+async def on_quiz_answer(callback: CallbackQuery):
+    _, term, chosen_str, correct_str = callback.data.split(":")
+    chosen = int(chosen_str)
+    correct = int(correct_str)
+    user_id = callback.from_user.id
+
+    add_quiz_attempt(user_id, term, chosen, correct)
+
+    if chosen == correct:
+        await callback.answer("Correct ✅", show_alert=True)
+    else:
+        await callback.answer(f"Not quite ❌ Correct: {correct+1}", show_alert=True)
 
 
 def create_bot_and_dispatcher(token: str):
+    init_db()
     bot = Bot(token)
     dp = Dispatcher()
     dp.include_router(router)
