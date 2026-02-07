@@ -26,23 +26,17 @@ DISTRACTORS_SCHEMA = {
 }
 
 def generate_quiz_distractors(term: str, correct_expl: str) -> list[str]:
-    """
-    Return 2 plausible but incorrect short explanations (B1 level).
-    They must sound natural but be clearly wrong.
-    """
     prompt = f"""
-You are an English teacher creating a multiple-choice quiz.
+You are an English teacher creating multiple-choice options.
 
 Term: "{term}"
-Correct explanation (DO NOT reuse this meaning): "{correct_expl}"
+Correct explanation (DO NOT copy): "{correct_expl}"
 
-Task:
 Generate EXACTLY 2 plausible but WRONG explanations (CEFR B1), 1 sentence each.
 Rules:
-- They must NOT match the correct meaning.
-- They must NOT be the opposite/negation like "not {term}".
-- They must be believable definitions a learner might confuse.
-- No mentions like "this is wrong".
+- Must not match the correct meaning.
+- Must not be simple negations/opposites.
+- Must be believable confusions.
 Return JSON ONLY: {{"distractors": ["...", "..."]}}
 """.strip()
 
@@ -60,8 +54,18 @@ Return JSON ONLY: {{"distractors": ["...", "..."]}}
         max_output_tokens=200
     )
 
+    import json
     data = json.loads(response.output_text)
-    return data["distractors"]
+    distractors = data.get("distractors")
+
+
+    if not isinstance(distractors, list) or len(distractors) != 2:
+        return [
+            "It describes something very expensive and luxurious.",
+            "It means to stop doing something for a short time."
+        ]
+    return distractors
+
 
 RESPONSE_SCHEMA = {
     "name": "english_context_result",

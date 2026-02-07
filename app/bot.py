@@ -197,7 +197,15 @@ async def on_quiz(callback: CallbackQuery):
             "It means to make a quick decision without thinking much."
         ]
         print("AI ERROR (distractors):", repr(e))
+        
+    distractors = await asyncio.to_thread(generate_quiz_distractors, term, correct)
 
+    if not distractors or not isinstance(distractors, list):
+        distractors = [
+        "It describes something very expensive and luxurious.",
+        "It means to stop doing something for a short time."
+    ]
+    
     options = [correct] + distractors
 
     import random
