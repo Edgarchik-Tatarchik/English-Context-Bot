@@ -99,14 +99,6 @@ async def on_more_examples(callback: CallbackQuery):
         await callback.message.answer("⚠️ AI error while generating more examples.")
         print("AI ERROR (more):", repr(e))
 
-@router.message(F.text == "/saved")
-async def saved_cmd(message: Message):
-    items = list_saved(message.from_user.id, limit=20)
-    if not items:
-        await message.answer("You haven't saved any terms yet. Use 💾 Save under an answer.")
-        return
-    text = "💾 Saved terms (latest 20):\n" + "\n".join([f"- {t}" for t in items])
-    await message.answer(text)
     
 @router.callback_query(F.data.startswith("saved:"))
 async def on_saved(callback: CallbackQuery):
@@ -160,7 +152,7 @@ async def on_save(callback: CallbackQuery):
 
     ok = save_term(
         user_id=user_id,
-        term=term,
+        term_key = term.lower(),
         explanation=payload["explanation"],
         examples=payload["examples"],
     )
@@ -174,38 +166,31 @@ async def on_save(callback: CallbackQuery):
 @router.callback_query(F.data.startswith("quiz:"))
 async def on_quiz(callback: CallbackQuery):
     user_id = callback.from_user.id
-
-    term = get_random_saved_term(user_id)
-    if not term:
-        await callback.answer("Save some terms first 🙂", show_alert=True)
-        return
+    term = callback.data.split(":", 1)[1].strip()   # <-- берём term из кнопки
 
     item = get_saved_item(user_id, term)
     if not item:
-        await callback.answer("Quiz data not found. Try again.", show_alert=True)
+        await callback.answer("This term is not saved yet. Press 💾 Save first.", show_alert=True)
         return
 
     correct = item.explanation.strip()
-
     await callback.answer("Generating quiz...")
 
     try:
         distractors = await asyncio.to_thread(generate_quiz_distractors, term, correct)
     except Exception as e:
-        distractors = [
-            "It describes someone who likes being alone and quiet.",
-            "It means to make a quick decision without thinking much."
-        ]
         print("AI ERROR (distractors):", repr(e))
-        
-    distractors = await asyncio.to_thread(generate_quiz_distractors, term, correct)
-
-    if not distractors or not isinstance(distractors, list):
         distractors = [
-        "It describes something very expensive and luxurious.",
-        "It means to stop doing something for a short time."
-    ]
-    
+            "It describes something very expensive and luxurious.",
+            "It means to stop doing something for a short time."
+        ]
+
+    if not isinstance(distractors, list) or len(distractors) != 2:
+        distractors = [
+            "It describes something very expensive and luxurious.",
+            "It means to stop doing something for a short time."
+        ]
+
     options = [correct] + distractors
 
     import random
@@ -224,6 +209,7 @@ async def on_quiz(callback: CallbackQuery):
     )
 
     await callback.message.answer(text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=kb.as_markup())
+
 
 
 @router.callback_query(F.data.startswith("quiz_ans:"))
