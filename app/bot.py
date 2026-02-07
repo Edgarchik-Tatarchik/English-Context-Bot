@@ -152,7 +152,7 @@ async def on_save(callback: CallbackQuery):
 
     ok = save_term(
         user_id=user_id,
-        term_key = term.lower(),
+        term = term.lower(),
         explanation=payload["explanation"],
         examples=payload["examples"],
     )
@@ -166,7 +166,7 @@ async def on_save(callback: CallbackQuery):
 @router.callback_query(F.data.startswith("quiz:"))
 async def on_quiz(callback: CallbackQuery):
     user_id = callback.from_user.id
-    term = callback.data.split(":", 1)[1].strip()   # <-- берём term из кнопки
+    term = callback.data.split(":", 1)[1].strip()  
 
     item = get_saved_item(user_id, term)
     if not item:
