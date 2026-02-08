@@ -14,6 +14,7 @@ router = Router()
 
 WORD_RE = re.compile(r"^[A-Za-z][A-Za-z\s'\-]{0,60}$")
 CACHE: dict[tuple[int, str], dict] = {}
+STARTED_USERS: set[int] = set()
 def escape_md_v2(text: str) -> str:
     
     return re.sub(r'([_*\[\]()~`>#+\-=|{}.!])', r'\\\1', text)
@@ -45,6 +46,7 @@ def format_answer(term: str, simple_explanation: str, examples: list[str]) -> tu
 
 @router.message(CommandStart())
 async def cmd_start(message: Message):
+    STARTED_USERS.add(message.from_user.id)
     text = (
         "👋 Hi! I’m *English Context Bot*.\n\n"
         "Send me an English word or short phrase (1–4 words), and I will:\n"
@@ -67,6 +69,9 @@ async def cmd_help(message: Message):
 
 @router.message(F.text)
 async def handle_text(message: Message):
+    if message.from_user.id not in STARTED_USERS:
+        await message.answer("Please type /start first 🙂")
+        return
     term = (message.text or "").strip()
 
     if not WORD_RE.match(term) or len(term.split()) > 4:
@@ -104,6 +109,9 @@ async def handle_text(message: Message):
 
 @router.callback_query(F.data.startswith("more:"))
 async def on_more_examples(callback: CallbackQuery):
+    if callback.from_user.id not in STARTED_USERS:
+        await callback.answer("Type /start first 🙂", show_alert=True)
+        return
     term = callback.data.split(":", 1)[1].strip()
 
     await callback.answer("Generating more examples...")
@@ -124,6 +132,9 @@ async def on_more_examples(callback: CallbackQuery):
     
 @router.callback_query(F.data.startswith("saved:"))
 async def on_saved(callback: CallbackQuery):
+    if callback.from_user.id not in STARTED_USERS:
+        await callback.answer("Type /start first 🙂", show_alert=True)
+        return
     page = int(callback.data.split(":")[1])
     terms = list_saved(callback.from_user.id, limit=300)  
     text, kb = render_saved_page(terms, page)
@@ -165,6 +176,9 @@ def render_saved_page(terms: list[str], page: int) -> tuple[str, InlineKeyboardM
 
 @router.callback_query(F.data.startswith("save:"))
 async def on_save(callback: CallbackQuery):
+    if callback.from_user.id not in STARTED_USERS:
+        await callback.answer("Type /start first 🙂", show_alert=True)
+        return
     term = callback.data.split(":", 1)[1].strip()
     user_id = callback.from_user.id
 
@@ -188,6 +202,9 @@ async def on_save(callback: CallbackQuery):
 
 @router.callback_query(F.data.startswith("quiz:"))
 async def on_quiz(callback: CallbackQuery):
+    if callback.from_user.id not in STARTED_USERS:
+        await callback.answer("Type /start first 🙂", show_alert=True)
+        return
     user_id = callback.from_user.id
     term = callback.data.split(":", 1)[1].strip()  
 
@@ -237,6 +254,9 @@ async def on_quiz(callback: CallbackQuery):
 
 @router.callback_query(F.data.startswith("quiz_ans:"))
 async def on_quiz_answer(callback: CallbackQuery):
+    if callback.from_user.id not in STARTED_USERS:
+        await callback.answer("Type /start first 🙂", show_alert=True)
+        return
     _, term, chosen_str, correct_str = callback.data.split(":")
     chosen = int(chosen_str)
     correct = int(correct_str)
