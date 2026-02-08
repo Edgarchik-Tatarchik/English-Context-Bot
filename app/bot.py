@@ -56,7 +56,7 @@ async def cmd_start(message: Message):
         "📚 Saved words — list your saved terms\n\n"
         "Try: `take a break`"
     )
-    await message.answer(text, parse_mode=ParseMode.MARKDOWN_V2)
+    await message.answer(text)
 
 @router.message(Command("help"))
 async def cmd_help(message: Message):
