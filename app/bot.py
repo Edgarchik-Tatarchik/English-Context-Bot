@@ -1,5 +1,6 @@
 import re
 import asyncio
+from aiogram.filters import CommandStart, Command
 from aiogram import Bot, Dispatcher, Router, F
 from aiogram.enums import ParseMode
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup
@@ -42,6 +43,27 @@ def format_answer(term: str, simple_explanation: str, examples: list[str]) -> tu
 
     return header, examples_text
 
+@router.message(CommandStart())
+async def cmd_start(message: Message):
+    text = (
+        "👋 Hi! I’m *English Context Bot*.\n\n"
+        "Send me an English word or short phrase (1–4 words), and I will:\n"
+        "• explain it in simple English\n"
+        "• generate 10 example sentences\n\n"
+        "Buttons:\n"
+        "💾 Save — save this term\n"
+        "🧠 Quiz — quiz from this saved term\n"
+        "📚 Saved words — list your saved terms\n\n"
+        "Try: `take a break`"
+    )
+    await message.answer(text, parse_mode=ParseMode.MARKDOWN_V2)
+
+@router.message(Command("help"))
+async def cmd_help(message: Message):
+    await message.answer(
+        "Send a word/phrase (1–4 words). Example: `make up`",
+        parse_mode=ParseMode.MARKDOWN_V2
+    )
 
 @router.message(F.text)
 async def handle_text(message: Message):
