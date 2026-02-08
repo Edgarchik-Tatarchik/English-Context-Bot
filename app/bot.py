@@ -128,7 +128,8 @@ def render_saved_page(terms: list[str], page: int) -> tuple[str, InlineKeyboardM
     chunk = terms[start:start + PAGE_SIZE]
 
     lines = "\n".join([f"{start+i+1}. {t}" for i, t in enumerate(chunk)])
-    text = f"📚 *Saved terms* (page {page}/{pages})\n\n{escape_md_v2(lines)}"
+    text = f"📚 *Saved terms* \\(page {page}/{pages}\\)\n\n{escape_md_v2(lines)}"
+
 
     kb = InlineKeyboardBuilder()
     if page > 1:
