@@ -14,7 +14,7 @@
 
 <p align="center">
   You can test this bot in Telegram app by following link:
-  <a href="https://t.me/YOUR_BOT_USERNAME">
+  <a href="https://t.me/@EnglishContextBot">
     <img src="https://img.shields.io/badge/Telegram-Try%20the%20bot-2CA5E0?logo=telegram&logoColor=white" />
   </a>
 </p>
