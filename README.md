@@ -64,17 +64,7 @@
   <li><b>dotenv</b> for environment variables</li>
 </ul>
 
-<h2>📸 Screenshots</h2>
-<p>
-  
-  <i>Coming soon.</i><br />
-  You can add images like:
-</p>
-<pre>
-&lt;p align="center"&gt;
-  &lt;img src="docs/screenshots/example.png" width="70%" /&gt;
-&lt;/p&gt;
-</pre>
+
 
 
 <h2>🤖 Bot Usage</h2>
