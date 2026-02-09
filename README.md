@@ -9,7 +9,6 @@
 <p align="center">
   <img alt="Python" src="https://img.shields.io/badge/Python-3.10%2B-blue" />
   <img alt="aiogram" src="https://img.shields.io/badge/aiogram-3.x-2ea44f" />
-  <img alt="License" src="https://img.shields.io/badge/License-MIT-black" />
 </p>
 
 <p align="center">
